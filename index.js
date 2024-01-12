@@ -34,6 +34,12 @@ class PrometheusSensorAccessory {
           this.service.getCharacteristic(this.Characteristic.OccupancyDetected)
             .onGet(this.handleOccupancyDetectedGet.bind(this));
           break;
+        case 'co2':
+          // create a new co2 Sensor service
+          this.service = new this.api.hap.Service.CarbonDioxideSensor(this.name);
+          this.service.getCharacteristic(this.Characteristic.CarbonDioxideLevel)
+            .onGet(this.handleCo2Get.bind(this));
+          break;
       }
   }
 
@@ -52,6 +58,15 @@ class PrometheusSensorAccessory {
     return this.queryPrometheus().then((result) => {
       this.log.debug('OccupancyDetected is ' + result)
       return parseInt(result);
+    });
+  }
+
+  handleCo2Get() {
+    this.log.debug('Triggered GET CarbonDioxideLevel');
+
+    return this.queryPrometheus().then((result) => {
+      this.log.debug('CarbonDioxideLevel is ' + result)
+      return Number.parseFloat(result).toFixed(1);
     });
   }
 
