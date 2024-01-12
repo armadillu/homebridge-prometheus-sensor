@@ -29,6 +29,7 @@
         "default": "temperature",
         "oneOf": [
           { "title": "Temperature sensor", "enum": ["temperature"] },
+          { "title": "CO2 sensor", "enum": ["co2"] },
           { "title": "Occupancy sensor", "enum": ["occupancy"] }
         ]
       }
