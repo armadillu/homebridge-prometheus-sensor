@@ -1,86 +1,69 @@
 const axios = require('axios');
 
 module.exports = (api) => {
-  api.registerAccessory('PrometheusSensorPlugin', PrometheusSensorAccessory);
+	api.registerAccessory('PrometheusSensorPlugin', PrometheusSensorAccessory);
 };
 
 class PrometheusSensorAccessory {
 
-  constructor(log, config, api) {
-      this.log = log;
-      this.config = config;
-      this.api = api;
+	constructor(log, config, api) {
+		this.log = log;
+		this.config = config;
+		this.api = api;
 
-      this.Service = this.api.hap.Service;
-      this.Characteristic = this.api.hap.Characteristic;
+		//this.Service = this.api.hap.Service;
+		//this.Characteristic = this.api.hap.Characteristic;
 
-      // extract configuration
-      this.name = config.name;
-      this.url = config.url;
-      this.query = config.query;
-      this.type = config.type || 'temperature';
+		// extract configuration
+		//this.name = config.name;
+		this.url = config.url;
+		this.query = config.query;
 
-      this.log.warn(this.type)
-      switch(this.type) {
-        case 'temperature':
-          // create a new Temperature Sensor service
-          this.service = new this.api.hap.Service.TemperatureSensor(this.name);
-          this.service.getCharacteristic(this.Characteristic.CurrentTemperature)
-            .onGet(this.handleCurrentTemperatureGet.bind(this));
-          break;
-        case 'occupancy':
-          // create a new Occupancy Sensor service
-          this.service = new this.api.hap.Service.OccupancySensor(this.name);
-          this.service.getCharacteristic(this.Characteristic.OccupancyDetected)
-            .onGet(this.handleOccupancyDetectedGet.bind(this));
-          break;
-        case 'co2':
-          // create a new co2 Sensor service
-          this.service = new this.api.hap.Service.CarbonDioxideSensor(this.name);
-          this.service.getCharacteristic(this.Characteristic.CarbonDioxideLevel)
-            .onGet(this.handleCo2Get.bind(this));
-          break;
-      }
-  }
+		this.log.warn(this.type)
 
-  handleCurrentTemperatureGet() {
-    this.log.debug('Triggered GET CurrentTemperature');
+		// create a new co2 Sensor service
+		this.co2Service = new this.api.hap.Service.CarbonDioxideSensor("Co2 Sensor");
+		this.co2Service.getCharacteristic(this.api.hap.Characteristic.CarbonDioxideLevel).onGet(this.handleCo2Get.bind(this));
 
-    return this.queryPrometheus().then((result) => {
-      this.log.debug('CurrentTemperature is ' + result)
-      return Number.parseFloat(result).toFixed(1);
-    });
-  }
+		// create a new Solar Sensor service - we disguise a light sensor as a Solar generator power output
+		this.lightService = new this.api.hap.Service.LightSensor("Solar Power Watts");
+		this.lightService.getCharacteristic(this.api.hap.Characteristic.CurrentAmbientLightLevel).onGet(this.handlePowerGet.bind(this));
 
-  handleOccupancyDetectedGet() {
-    this.log.debug('Triggered GET OccupancyDetected');
+	}
 
-    return this.queryPrometheus().then((result) => {
-      this.log.debug('OccupancyDetected is ' + result)
-      return parseInt(result);
-    });
-  }
+	handleCo2Get() {
+		this.log.debug('Triggered GET CarbonDioxideLevel');
 
-  handleCo2Get() {
-    this.log.debug('Triggered GET CarbonDioxideLevel');
+		return this.queryPrometheus("rco2").then((result) => {
+			this.log.debug('CarbonDioxideLevel is ' + result)
+			return Number.parseFloat(result).toFixed(1);
+		});
+	}
 
-    return this.queryPrometheus().then((result) => {
-      this.log.debug('CarbonDioxideLevel is ' + result)
-      return Number.parseFloat(result).toFixed(1);
-    });
-  }
+	handlePowerGet() {
+		this.log.debug('Triggered GET CurrentAmbientLightLevel');
 
-  queryPrometheus() {
-    let url = this.url + "/api/v1/query?query=" + this.query;
-    const response = axios.get(url)
-    return response.then((response) => {
-      return response.data["data"]["result"][0]["value"][1];
-    })
-  }
+		return this.queryPrometheus("input_power").then((result) => {
+			this.log.debug('CurrentAmbientLightLevel is ' + result)
+			let temp = Number.parseFloat(result).toFixed(1);
+			if(temp <= 0.0001) temp = 0.0001;
+			return temp;
+		});
+	}
 
-  getServices() {
-    return [
-      this.service
-    ];
-  }
+
+	queryPrometheus(itemName) {
+		let url = this.url + "/api/v1/query?query=" + itemName;
+		const response = axios.get(url)
+		return response.then((response) => {
+			return response.data["data"]["result"][0]["value"][1];
+		})
+	}
+
+	getServices() {
+		return [
+			this.co2Service,
+			this.lightService
+		];
+	}
 }

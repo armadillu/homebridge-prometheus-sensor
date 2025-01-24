@@ -6,32 +6,11 @@
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name of the sensor",
-        "type": "string",
-        "required": true
-      },
       "url": {
         "title": "Url of the prometheus server",
         "type": "string",
         "required": true,
         "placeholder": "https://prometheus.example.com"
-      },
-      "query": {
-        "title": "Prometheus query to fetch value",
-        "type": "string",
-        "required": true
-      },
-      "type": {
-        "title": "Sensor type",
-        "type": "string",
-        "required": true,
-        "default": "temperature",
-        "oneOf": [
-          { "title": "Temperature sensor", "enum": ["temperature"] },
-          { "title": "CO2 sensor", "enum": ["co2"] },
-          { "title": "Occupancy sensor", "enum": ["occupancy"] }
-        ]
       }
     }
   }
