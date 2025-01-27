@@ -1,7 +1,7 @@
 {
-  "name": "homebridge-prometheus-sensor",
-  "version": "0.0.3",
-  "description": "A homebridge plugin to fetch sensor data from prometheus",
+  "name": "homebridge-prometheus-sensor2",
+  "version": "0.0.4",
+  "description": "A homebridge plugin to fetch sensor data from prometheus - fork",
   "main": "index.js",
   "scripts": {
     "test": "echo \"No test specified\" && exit 0"
@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joconcepts/homebridge-prometheus-sensor"
+    "url": "git+https://github.com/armadillu/homebridge-prometheus-sensor"
   },
   "author": "Jonas Keidel",
   "license": "MIT",

@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = (api) => {
-	api.registerAccessory('PrometheusSensorPlugin', PrometheusSensorAccessory);
+	api.registerAccessory('PrometheusSensorPlugin2', PrometheusSensorAccessory);
 };
 
 class PrometheusSensorAccessory {
