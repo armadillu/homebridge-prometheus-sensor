@@ -1,16 +1,74 @@
 {
   "pluginAlias": "PrometheusSensorPlugin2",
-  "pluginType": "accessory",
-  "singular": false,
-  "headerDisplay": "A Homebridge plugin for displaying data provided by Prometheus as sensor.",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Display Prometheus metrics as HomeKit sensors.",
   "schema": {
     "type": "object",
+    "required": ["name", "url", "sensors"],
     "properties": {
-      "url": {
-        "title": "Url of the prometheus server",
+      "name": {
+        "title": "Platform name",
         "type": "string",
-        "required": true,
+        "placeholder": "Prometheus sensors"
+      },
+      "url": {
+        "title": "Prometheus or Mimir base URL",
+        "type": "string",
         "placeholder": "https://prometheus.example.com"
+      },
+      "sensors": {
+        "title": "Sensors",
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["id", "name", "type", "query"],
+          "properties": {
+            "id": {
+              "title": "Sensor ID",
+              "type": "string",
+              "minLength": 1,
+              "description": "Unique stable ID. Keep it unchanged when renaming the sensor."
+            },
+            "name": {
+              "title": "Sensor name",
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "title": "Sensor type",
+              "type": "string",
+              "enum": ["co2", "humidity", "power", "temperature"],
+              "enumNames": ["Carbon dioxide", "Humidity", "Power (light sensor)", "Temperature"]
+            },
+            "query": {
+              "title": "Prometheus query",
+              "type": "string",
+              "minLength": 1,
+              "description": "PromQL expression returning an instant vector."
+            }
+          }
+        }
+      },
+      "username": {
+        "title": "Basic authentication username",
+        "type": "string"
+      },
+      "password": {
+        "title": "Basic authentication password",
+        "type": "string",
+        "format": "password"
+      },
+      "bearerToken": {
+        "title": "Bearer token",
+        "type": "string",
+        "format": "password"
+      },
+      "mimirTenantId": {
+        "title": "Mimir tenant ID",
+        "type": "string",
+        "description": "Optional X-Scope-OrgID header for multi-tenant Mimir."
       }
     }
   }
