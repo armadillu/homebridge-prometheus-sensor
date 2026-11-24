@@ -4,7 +4,7 @@
   "description": "A Homebridge dynamic platform for Prometheus and Mimir sensors",
   "main": "index.js",
   "scripts": {
-    "test": "node --test"
+    "test": "c8 --all --include=index.js --check-coverage --lines 75 --functions 75 --branches 75 --statements 75 node --test"
   },
   "keywords": [
     "homebridge-plugin",
@@ -24,6 +24,9 @@
   "author": "Jonas Keidel",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.4.0"
+    "axios": "^1.21.1"
+  },
+  "devDependencies": {
+    "c8": "^9.1.0"
   }
 }

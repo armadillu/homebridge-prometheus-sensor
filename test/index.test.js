@@ -182,3 +182,44 @@ test('uses bearer authentication and rejects incomplete or conflicting credentia
 		axios.get = originalGet;
 	}
 });
+
+test('exposes CO2 and power readings and clamps non-positive power', async () => {
+	const originalGet = axios.get;
+	const requests = [];
+	axios.get = async (url, config) => {
+		requests.push(config.params.query);
+		const values = { rco2: '413.76', input_power: '0' };
+		return { data: { data: { result: [{ value: [0, values[config.params.query]] }] } } };
+	};
+
+	try {
+		const { registered, api } = createPlatform();
+		const accessory = registered[0];
+		const co2 = accessory.getService(api.hap.Service.CarbonDioxideSensor);
+		const power = accessory.getService(api.hap.Service.LightSensor);
+		assert.equal(await co2.getCharacteristic(api.hap.Characteristic.CarbonDioxideLevel).getter(), 413.76);
+		assert.equal(await power.getCharacteristic(api.hap.Characteristic.CurrentAmbientLightLevel).getter(), 0.0001);
+		assert.deepEqual(requests, ['rco2', 'input_power']);
+	} finally {
+		axios.get = originalGet;
+	}
+});
+
+test('rejects missing and non-numeric Prometheus values and propagates request errors', async () => {
+	const originalGet = axios.get;
+	const { platform } = createPlatform();
+
+	try {
+		axios.get = async () => ({ data: { data: { result: [] } } });
+		await assert.rejects(platform.queryPrometheus('rco2'), /no value/);
+
+		axios.get = async () => ({ data: { data: { result: [{ value: [0, 'not-a-number'] }] } } });
+		await assert.rejects(platform.queryPrometheus('rco2'), /non-numeric/);
+
+		const error = new Error('Prometheus unavailable');
+		axios.get = async () => { throw error; };
+		await assert.rejects(platform.handleCo2Get(), (caught) => caught === error);
+	} finally {
+		axios.get = originalGet;
+	}
+});
