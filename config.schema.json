@@ -5,10 +5,10 @@
   "headerDisplay": "Display Prometheus metrics as HomeKit sensors.",
   "schema": {
     "type": "object",
-    "required": ["name", "url"],
+    "required": ["name", "url", "sensors"],
     "properties": {
       "name": {
-        "title": "Accessory name",
+        "title": "Platform name",
         "type": "string",
         "placeholder": "Prometheus sensors"
       },
@@ -16,6 +16,40 @@
         "title": "Prometheus or Mimir base URL",
         "type": "string",
         "placeholder": "https://prometheus.example.com"
+      },
+      "sensors": {
+        "title": "Sensors",
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["id", "name", "type", "query"],
+          "properties": {
+            "id": {
+              "title": "Sensor ID",
+              "type": "string",
+              "minLength": 1,
+              "description": "Unique stable ID. Keep it unchanged when renaming the sensor."
+            },
+            "name": {
+              "title": "Sensor name",
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "title": "Sensor type",
+              "type": "string",
+              "enum": ["co2", "humidity", "power", "temperature"],
+              "enumNames": ["Carbon dioxide", "Humidity", "Power (light sensor)", "Temperature"]
+            },
+            "query": {
+              "title": "Prometheus query",
+              "type": "string",
+              "minLength": 1,
+              "description": "PromQL expression returning an instant vector."
+            }
+          }
+        }
       },
       "username": {
         "title": "Basic authentication username",

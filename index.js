@@ -2,6 +2,12 @@ const axios = require('axios');
 
 const PLUGIN_NAME = 'homebridge-prometheus-sensor2';
 const PLATFORM_NAME = 'PrometheusSensorPlugin2';
+const SENSOR_TYPES = {
+	co2: ['CarbonDioxideSensor', 'CarbonDioxideLevel'],
+	humidity: ['HumiditySensor', 'CurrentRelativeHumidity'],
+	power: ['LightSensor', 'CurrentAmbientLightLevel'],
+	temperature: ['TemperatureSensor', 'CurrentTemperature'],
+};
 
 module.exports = (api) => {
 	api.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, PrometheusSensorPlatform, true);
@@ -16,7 +22,7 @@ class PrometheusSensorPlatform {
 		this.name = config.name;
 		this.url = config.url.replace(/\/+$/, '');
 		this.authConfig = this.createAuthConfig(config);
-		this.uuid = api.hap.uuid.generate(PLUGIN_NAME);
+		this.sensors = this.validateSensors(config.sensors);
 		this.cachedAccessories = [];
 
 		api.on('didFinishLaunching', () => this.didFinishLaunching());
@@ -27,36 +33,41 @@ class PrometheusSensorPlatform {
 	}
 
 	didFinishLaunching() {
-		const accessory = this.cachedAccessories.find((cached) => cached.UUID === this.uuid)
-			|| new this.api.platformAccessory(this.name, this.uuid);
-		const staleAccessories = this.cachedAccessories.filter((cached) => cached.UUID !== this.uuid);
 		const Service = this.api.hap.Service;
 		const Characteristic = this.api.hap.Characteristic;
-		accessory.displayName = this.name;
+		const activeUUIDs = new Set();
+		for (const sensor of this.sensors) {
+			const uuid = this.api.hap.uuid.generate(`${PLUGIN_NAME}:${sensor.id}`);
+			activeUUIDs.add(uuid);
+			const accessory = this.cachedAccessories.find((cached) => cached.UUID === uuid)
+				|| new this.api.platformAccessory(sensor.name, uuid);
+			const [serviceName, characteristicName] = SENSOR_TYPES[sensor.type];
+			accessory.displayName = sensor.name;
 
-		this.addService(accessory, Service.CarbonDioxideSensor, 'Co2 Sensor')
-			.getCharacteristic(Characteristic.CarbonDioxideLevel)
-			.onGet(this.handleCo2Get.bind(this));
+			for (const [otherServiceName] of Object.values(SENSOR_TYPES)) {
+				if (otherServiceName !== serviceName) {
+					const oldService = accessory.getService(Service[otherServiceName]);
+					if (oldService) accessory.removeService(oldService);
+				}
+			}
+			const service = this.addService(accessory, Service[serviceName], sensor.name);
+			service.setCharacteristic(Characteristic.Name, sensor.name);
+			service
+				.getCharacteristic(Characteristic[characteristicName])
+				.onGet(() => this.readSensor(sensor));
 
-		this.addService(accessory, Service.LightSensor, 'Solar Power Watts')
-			.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
-			.onGet(this.handlePowerGet.bind(this));
-
-		this.addService(accessory, Service.HumiditySensor, 'Humidity')
-			.getCharacteristic(Characteristic.CurrentRelativeHumidity)
-			.onGet(this.handleHumidityGet.bind(this));
-
-		const information = accessory.getService(Service.AccessoryInformation)
-			|| accessory.addService(Service.AccessoryInformation);
-		information
-			.setCharacteristic(Characteristic.Manufacturer, 'Prometheus')
-			.setCharacteristic(Characteristic.Model, 'Prometheus Sensor');
-
+			const information = accessory.getService(Service.AccessoryInformation)
+				|| accessory.addService(Service.AccessoryInformation);
+			information
+				.setCharacteristic(Characteristic.Manufacturer, 'Prometheus')
+				.setCharacteristic(Characteristic.Model, 'Prometheus Sensor');
+			if (!this.cachedAccessories.includes(accessory)) {
+				this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+			}
+		}
+		const staleAccessories = this.cachedAccessories.filter((cached) => !activeUUIDs.has(cached.UUID));
 		if (staleAccessories.length) {
 			this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, staleAccessories);
-		}
-		if (!this.cachedAccessories.includes(accessory)) {
-			this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
 		}
 	}
 
@@ -64,23 +75,33 @@ class PrometheusSensorPlatform {
 		return accessory.getService(serviceType) || accessory.addService(serviceType, name);
 	}
 
-	handleCo2Get() {
-		this.log.debug('Triggered GET CarbonDioxideLevel');
-		return this.queryPrometheus('rco2');
-	}
-
-	handlePowerGet() {
-		this.log.debug('Triggered GET CurrentAmbientLightLevel');
-		return this.queryPrometheus('input_power').then((value) => Math.max(value, 0.0001));
-	}
-
-	handleHumidityGet() {
-		this.log.debug('Triggered GET CurrentRelativeHumidity');
-		return this.queryPrometheus('humidity').then((value) => {
-			if (value < 0 || value > 100) {
+	readSensor(sensor) {
+		this.log.debug(`Reading sensor "${sensor.name}"`);
+		return this.queryPrometheus(sensor.query).then((value) => {
+			if (sensor.type === 'humidity' && (value < 0 || value > 100)) {
 				throw new Error(`Prometheus humidity value must be between 0 and 100; received ${value}`);
 			}
-			return value;
+			return sensor.type === 'power' ? Math.max(value, 0.0001) : value;
+		});
+	}
+
+	validateSensors(sensors) {
+		if (!Array.isArray(sensors) || sensors.length === 0) {
+			throw new Error('Configure at least one sensor in the sensors list');
+		}
+		const ids = new Set();
+		return sensors.map((sensor) => {
+			if (!sensor || typeof sensor !== 'object'
+				|| !['id', 'name', 'query'].every((key) => typeof sensor[key] === 'string' && sensor[key].trim())) {
+				throw new Error('Each sensor requires a non-empty id, name, and query');
+			}
+			if (!Object.prototype.hasOwnProperty.call(SENSOR_TYPES, sensor.type)) {
+				throw new Error(`Unsupported sensor type "${sensor.type}"`);
+			}
+			const id = sensor.id.trim();
+			if (ids.has(id)) throw new Error(`Duplicate sensor id "${id}"`);
+			ids.add(id);
+			return { ...sensor, id };
 		});
 	}
 
