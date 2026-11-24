@@ -1,6 +1,6 @@
 {
   "name": "homebridge-prometheus-sensor2",
-  "version": "0.0.5",
+  "version": "0.0.8",
   "description": "A Homebridge dynamic platform for Prometheus and Mimir sensors",
   "main": "index.js",
   "scripts": {

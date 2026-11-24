@@ -14,11 +14,20 @@ class PrometheusSensorPlatform {
 		this.config = config;
 		this.api = api;
 		this.name = config.name;
-		this.url = config.url.replace(/\/+$/, '');
-		this.authConfig = this.createAuthConfig(config);
+		this.url = typeof config.url === 'string' ? config.url.trim().replace(/\/+$/, '') : '';
+		this.configurationError = this.validateUrl(this.url);
+		try {
+			this.authConfig = this.createAuthConfig(config);
+		} catch (error) {
+			this.configurationError = error;
+			this.authConfig = {};
+		}
 		this.uuid = api.hap.uuid.generate(PLUGIN_NAME);
 		this.cachedAccessories = [];
 
+		if (this.configurationError) {
+			this.log.error(`Invalid platform configuration: ${this.configurationError.message}`);
+		}
 		api.on('didFinishLaunching', () => this.didFinishLaunching());
 	}
 
@@ -27,6 +36,10 @@ class PrometheusSensorPlatform {
 	}
 
 	didFinishLaunching() {
+		if (this.configurationError) {
+			return;
+		}
+
 		const accessory = this.cachedAccessories.find((cached) => cached.UUID === this.uuid)
 			|| new this.api.platformAccessory(this.name, this.uuid);
 		const staleAccessories = this.cachedAccessories.filter((cached) => cached.UUID !== this.uuid);
@@ -78,7 +91,9 @@ class PrometheusSensorPlatform {
 		this.log.debug('Triggered GET CurrentRelativeHumidity');
 		return this.queryPrometheus('humidity').then((value) => {
 			if (value < 0 || value > 100) {
-				throw new Error(`Prometheus humidity value must be between 0 and 100; received ${value}`);
+				const error = new Error(`Prometheus humidity value must be between 0 and 100; received ${value}`);
+				this.log.error(`Failed to read humidity metric: ${error.message}`);
+				throw error;
 			}
 			return value;
 		});
@@ -104,7 +119,23 @@ class PrometheusSensorPlatform {
 					throw new Error(`Prometheus returned a non-numeric value for metric "${metric}"`);
 				}
 				return value;
+			})
+			.catch((error) => {
+				this.log.error(`Failed to query Prometheus metric "${metric}": ${error.message}`);
+				throw error;
 			});
+	}
+
+	validateUrl(url) {
+		try {
+			const parsedUrl = new URL(url);
+			if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+				throw new Error();
+			}
+			return null;
+		} catch {
+			return new Error('url must be a valid HTTP or HTTPS URL');
+		}
 	}
 
 	createAuthConfig(config) {

@@ -53,6 +53,7 @@ class PlatformAccessory {
 function createPlatform(configOverrides = {}) {
 	const listeners = {};
 	const registered = [];
+	const errors = [];
 	const api = {
 		registerPlatform: (pluginName, platformName, constructor) => {
 			api.platformConstructor = constructor;
@@ -82,8 +83,12 @@ function createPlatform(configOverrides = {}) {
 		},
 	};
 	registerPlugin(api);
+	const log = {
+		debug: () => {},
+		error: (message) => errors.push(message),
+	};
 	const platform = new api.platformConstructor(
-		{ debug: () => {} },
+		log,
 		{
 			name: 'Prometheus sensors',
 			url: 'https://prometheus.example.com/',
@@ -92,7 +97,7 @@ function createPlatform(configOverrides = {}) {
 		api,
 	);
 	listeners.didFinishLaunching();
-	return { platform, registered, api };
+	return { platform, registered, api, errors };
 }
 
 test('registers a dynamic platform and exposes a humidity service reading the humidity metric', async () => {
@@ -123,8 +128,9 @@ test('rejects humidity values outside HomeKit percentage bounds', async () => {
 	axios.get = async () => ({ data: { data: { result: [{ value: [0, '101'] }] } } });
 
 	try {
-		const { platform } = createPlatform();
+		const { platform, errors } = createPlatform();
 		await assert.rejects(platform.handleHumidityGet(), /between 0 and 100/);
+		assert.match(errors[0], /Failed to read humidity metric/);
 	} finally {
 		axios.get = originalGet;
 	}
@@ -170,14 +176,6 @@ test('uses bearer authentication and rejects incomplete or conflicting credentia
 			params: { query: 'rco2' },
 			headers: { Authorization: 'Bearer secret-token' },
 		});
-		assert.throws(
-			() => createPlatform({ username: 'user' }),
-			/Both username and password are required/,
-		);
-		assert.throws(
-			() => createPlatform({ username: 'user', password: 'secret', bearerToken: 'token' }),
-			/either bearerToken or username\/password/,
-		);
 	} finally {
 		axios.get = originalGet;
 	}
@@ -207,7 +205,7 @@ test('exposes CO2 and power readings and clamps non-positive power', async () =>
 
 test('rejects missing and non-numeric Prometheus values and propagates request errors', async () => {
 	const originalGet = axios.get;
-	const { platform } = createPlatform();
+	const { platform, errors } = createPlatform();
 
 	try {
 		axios.get = async () => ({ data: { data: { result: [] } } });
@@ -219,7 +217,26 @@ test('rejects missing and non-numeric Prometheus values and propagates request e
 		const error = new Error('Prometheus unavailable');
 		axios.get = async () => { throw error; };
 		await assert.rejects(platform.handleCo2Get(), (caught) => caught === error);
+		assert.match(errors.at(-1), /Failed to query Prometheus metric "rco2"/);
 	} finally {
 		axios.get = originalGet;
 	}
+});
+
+test('logs invalid configuration and does not register an accessory', () => {
+	const invalidCredentials = createPlatform({ username: 'user' });
+	assert.equal(invalidCredentials.registered.length, 0);
+	assert.match(invalidCredentials.errors[0], /Both username and password are required/);
+
+	const conflictingCredentials = createPlatform({
+		username: 'user',
+		password: 'secret',
+		bearerToken: 'token',
+	});
+	assert.equal(conflictingCredentials.registered.length, 0);
+	assert.match(conflictingCredentials.errors[0], /either bearerToken or username\/password/);
+
+	const invalidUrl = createPlatform({ url: 'file:///tmp/prometheus' });
+	assert.equal(invalidUrl.registered.length, 0);
+	assert.match(invalidUrl.errors[0], /valid HTTP or HTTPS URL/);
 });
