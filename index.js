@@ -20,11 +20,19 @@ class PrometheusSensorPlatform {
 		this.config = config;
 		this.api = api;
 		this.name = config.name;
-		this.url = config.url.replace(/\/+$/, '');
-		this.authConfig = this.createAuthConfig(config);
-		this.sensors = this.validateSensors(config.sensors);
+		this.url = typeof config.url === 'string' ? config.url.trim().replace(/\/+$/, '') : '';
+		this.configurationError = this.validateUrl(this.url);
+		try {
+			this.authConfig = this.createAuthConfig(config);
+			this.sensors = this.validateSensors(config.sensors);
+		} catch (error) {
+			this.configurationError = this.configurationError || error;
+		}
 		this.cachedAccessories = [];
 
+		if (this.configurationError) {
+			this.log.error(`Invalid platform configuration: ${this.configurationError.message}`);
+		}
 		api.on('didFinishLaunching', () => this.didFinishLaunching());
 	}
 
@@ -33,6 +41,10 @@ class PrometheusSensorPlatform {
 	}
 
 	didFinishLaunching() {
+		if (this.configurationError) {
+			return;
+		}
+
 		const Service = this.api.hap.Service;
 		const Characteristic = this.api.hap.Characteristic;
 		const activeUUIDs = new Set();
@@ -79,7 +91,9 @@ class PrometheusSensorPlatform {
 		this.log.debug(`Reading sensor "${sensor.name}"`);
 		return this.queryPrometheus(sensor.query).then((value) => {
 			if (sensor.type === 'humidity' && (value < 0 || value > 100)) {
-				throw new Error(`Prometheus humidity value must be between 0 and 100; received ${value}`);
+				const error = new Error(`Prometheus humidity value must be between 0 and 100; received ${value}`);
+				this.log.error(`Failed to read humidity metric: ${error.message}`);
+				throw error;
 			}
 			return sensor.type === 'power' ? Math.max(value, 0.0001) : value;
 		});
@@ -125,7 +139,23 @@ class PrometheusSensorPlatform {
 					throw new Error(`Prometheus returned a non-numeric value for metric "${metric}"`);
 				}
 				return value;
+			})
+			.catch((error) => {
+				this.log.error(`Failed to query Prometheus metric "${metric}": ${error.message}`);
+				throw error;
 			});
+	}
+
+	validateUrl(url) {
+		try {
+			const parsedUrl = new URL(url);
+			if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+				throw new Error();
+			}
+			return null;
+		} catch {
+			return new Error('url must be a valid HTTP or HTTPS URL');
+		}
 	}
 
 	createAuthConfig(config) {

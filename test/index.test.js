@@ -85,6 +85,7 @@ function createPlatform(configOverrides = {}, cached = []) {
 	const listeners = {};
 	const registered = [];
 	const unregistered = [];
+	const errors = [];
 	const api = {
 		registerPlatform: (pluginName, platformName, constructor) => {
 			assert.equal(pluginName, 'homebridge-prometheus-sensor2');
@@ -99,13 +100,13 @@ function createPlatform(configOverrides = {}, cached = []) {
 	};
 	registerPlugin(api);
 	const platform = new api.platformConstructor(
-		{ debug: () => {} },
+		{ debug: () => {}, error: (message) => errors.push(message) },
 		{ name: 'Prometheus sensors', url: 'https://prometheus.example.com/', sensors, ...configOverrides },
 		api,
 	);
 	cached.forEach((accessory) => platform.configureAccessory(accessory));
 	listeners.didFinishLaunching();
-	return { platform, registered, unregistered, api };
+	return { platform, registered, unregistered, api, errors };
 }
 
 function response(value) {
@@ -155,11 +156,23 @@ test('keeps stable IDs across renames, replaces changed sensor types, and remove
 });
 
 test('validates required sensors, unique IDs, and supported types', () => {
-	assert.throws(() => createPlatform({ sensors: undefined }), /at least one sensor/);
-	assert.throws(() => createPlatform({ sensors: [] }), /at least one sensor/);
-	assert.throws(() => createPlatform({ sensors: [{ ...sensors[0], query: ' ' }] }), /non-empty id, name, and query/);
-	assert.throws(() => createPlatform({ sensors: [{ ...sensors[0], type: 'toString' }] }), /Unsupported sensor type/);
-	assert.throws(() => createPlatform({ sensors: [sensors[0], { ...sensors[0], id: ' co2 ' }] }), /Duplicate sensor id/);
+	const cases = [
+		[{ sensors: undefined }, /at least one sensor/],
+		[{ sensors: [] }, /at least one sensor/],
+		[{ sensors: [{ ...sensors[0], query: ' ' }] }, /non-empty id, name, and query/],
+		[{ sensors: [{ ...sensors[0], type: 'toString' }] }, /Unsupported sensor type/],
+		[{ sensors: [sensors[0], { ...sensors[0], id: ' co2 ' }] }, /Duplicate sensor id/],
+		[{ url: 'file:///tmp/prometheus' }, /valid HTTP or HTTPS URL/],
+		[{ username: 'user' }, /Both username and password are required/],
+		[{ username: 'user', password: 'secret', bearerToken: 'token' }, /either bearerToken or username\/password/],
+	];
+	const cached = new PlatformAccessory('Existing', 'existing');
+	for (const [config, expected] of cases) {
+		const result = createPlatform(config, [cached]);
+		assert.match(result.errors[0], expected);
+		assert.equal(result.registered.length, 0);
+		assert.equal(result.unregistered.length, 0);
+	}
 });
 
 test('sends shared Mimir tenant and basic authentication with each query', async () => {
@@ -180,14 +193,13 @@ test('supports bearer authentication and rejects incomplete or conflicting crede
 	const { platform } = createPlatform({ bearerToken: 'secret-token' });
 	await platform.queryPrometheus('rco2');
 	assert.deepEqual(request[1], { params: { query: 'rco2' }, headers: { Authorization: 'Bearer secret-token' } });
-	assert.throws(() => createPlatform({ username: 'user' }), /Both username and password are required/);
-	assert.throws(() => createPlatform({ username: 'user', password: 'secret', bearerToken: 'token' }), /either bearerToken or username\/password/);
 });
 
 test('rejects invalid humidity and Prometheus responses, and propagates request failures', async () => {
-	const { platform } = createPlatform();
+	const { platform, errors } = createPlatform();
 	axios.get = async () => response('101');
 	await assert.rejects(platform.readSensor(sensors[2]), /between 0 and 100/);
+	assert.match(errors.at(-1), /Failed to read humidity metric/);
 	axios.get = async () => ({ data: { data: { result: [] } } });
 	await assert.rejects(platform.queryPrometheus('rco2'), /no value/);
 	axios.get = async () => response('not-a-number');
@@ -195,4 +207,5 @@ test('rejects invalid humidity and Prometheus responses, and propagates request 
 	const error = new Error('Prometheus unavailable');
 	axios.get = async () => { throw error; };
 	await assert.rejects(platform.readSensor(sensors[0]), (caught) => caught === error);
+	assert.match(errors.at(-1), /Failed to query Prometheus metric "rco2/);
 });
