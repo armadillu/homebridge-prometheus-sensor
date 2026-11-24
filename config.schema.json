@@ -1,16 +1,40 @@
 {
   "pluginAlias": "PrometheusSensorPlugin2",
-  "pluginType": "accessory",
-  "singular": false,
-  "headerDisplay": "A Homebridge plugin for displaying data provided by Prometheus as sensor.",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Display Prometheus metrics as HomeKit sensors.",
   "schema": {
     "type": "object",
+    "required": ["name", "url"],
     "properties": {
-      "url": {
-        "title": "Url of the prometheus server",
+      "name": {
+        "title": "Accessory name",
         "type": "string",
-        "required": true,
+        "placeholder": "Prometheus sensors"
+      },
+      "url": {
+        "title": "Prometheus or Mimir base URL",
+        "type": "string",
         "placeholder": "https://prometheus.example.com"
+      },
+      "username": {
+        "title": "Basic authentication username",
+        "type": "string"
+      },
+      "password": {
+        "title": "Basic authentication password",
+        "type": "string",
+        "format": "password"
+      },
+      "bearerToken": {
+        "title": "Bearer token",
+        "type": "string",
+        "format": "password"
+      },
+      "mimirTenantId": {
+        "title": "Mimir tenant ID",
+        "type": "string",
+        "description": "Optional X-Scope-OrgID header for multi-tenant Mimir."
       }
     }
   }

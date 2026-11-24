@@ -1,27 +1,32 @@
 {
   "name": "homebridge-prometheus-sensor2",
-  "version": "0.0.4",
-  "description": "A homebridge plugin to fetch sensor data from prometheus - fork",
+  "version": "0.0.5",
+  "description": "A Homebridge dynamic platform for Prometheus and Mimir sensors",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"No test specified\" && exit 0"
+    "test": "c8 --all --include=index.js --check-coverage --lines 75 --functions 75 --branches 75 --statements 75 node --test"
   },
   "keywords": [
     "homebridge-plugin",
     "homekit",
-    "prometheus"
+    "prometheus",
+    "mimir",
+    "supports-hap"
   ],
   "engines": {
-    "node": ">4.0.0",
-    "homebridge": ">=0.2.0"
+    "node": ">=18",
+    "homebridge": ">=1.6.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/armadillu/homebridge-prometheus-sensor"
+    "url": "git+https://github.com/barcar/homebridge-prometheus-sensor.git"
   },
   "author": "Jonas Keidel",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.4.0"
+    "axios": "^1.21.1"
+  },
+  "devDependencies": {
+    "c8": "^9.1.0"
   }
 }
